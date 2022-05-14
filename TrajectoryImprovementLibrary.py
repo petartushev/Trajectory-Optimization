@@ -103,7 +103,7 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
                         lowest_error = error
                     
         
-        new_path_error = aux_CalculateTrajectoryError( t1Traj, variablePoints)
+        new_path_error = aux_CalculateTrajectoryError( t1Traj, variablePoints )
 
         if new_path_error < Error:
             bestTraj = np.copy( t1Traj )
@@ -135,18 +135,51 @@ def getNeighbours( point, auxParameters ):
 
 
 
-
-
-
-
 def Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters ):
-    print()
+
+    initial_temp = 90
+    final_temp = .1
+    alpha = .01
+
+    current_temp = initial_temp
+
+    bestTraj = np.copy( originalTraj )
+    
+
+    while current_temp > final_temp:
+
+        for k in range( len( originalTraj.shape[0] ) ):
+
+            solution = np.copy( bestTraj )
+            
+            if variablePoints[k]:
+
+                neighbour = random.choice(getNeighbours(solution[k], auxParameters))
+
+                solution[k + 1] = neighbour
+
+                cost_diff = aux_CalculateErrorSinglePoint(bestTraj, k + 1) - aux_CalculateErrorSinglePoint(solution, k + 1)
+
+                if cost_diff > 0:
+
+                    bestTraj = np.copy( solution )
+
+                else:
+
+                    if random.uniform(0, 1) < math.exp(-cost_diff/current_temp):
+
+                        bestTraj = np.copy( solution )
+
+        current_temp -= alpha
+
+    return bestTraj
+
 
 def Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters ):
-    print('help')
+    raise NotImplementedError
 
 def Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters ):
-    print()
+    raise NotImplementedError
 
 
 
