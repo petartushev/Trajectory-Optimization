@@ -20,7 +20,7 @@ def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm ):
 
     if optAlgorithm == 'hill_climb':
         auxParameters = { 'numIters': 1000 }
-        newTraj = Algorithm_Hill_climb( originalTraj, variablePoints, auxParameters )
+        newTraj = Algorithm_Hill_Climb( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'simulated_annealing':
         auxParameters = { 'numIters': 1000 }
@@ -106,8 +106,10 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
         new_path_error = aux_CalculateTrajectoryError( t1Traj, variablePoints)
 
         if new_path_error < Error:
-            bestTraj = t1Traj
+            bestTraj = np.copy( t1Traj )
             Error = new_path_error
+
+    return bestTraj
                     
 
 
@@ -118,9 +120,12 @@ def getNeighbours( point, auxParameters ):
     neighbours = []
 
     for _ in auxParameters[ 'numIters' ]:
-        neighbour = point 
-        neighbour[1] = + np.random.normal(0, .1)
-        neighbour[2] = + np.random.normal(0, .1)
+
+        neighbour = np.copy( point )
+
+        neighbour[1] += np.random.normal( 0, .1 )
+        neighbour[2] += np.random.normal( 0, .1 )
+
         neighbours.append(neighbour)
 
     return neighbours
@@ -138,7 +143,7 @@ def Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters )
     print()
 
 def Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters ):
-    print()
+    print('help')
 
 def Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters ):
     print()
