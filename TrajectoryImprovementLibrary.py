@@ -176,7 +176,60 @@ def Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters )
 
 
 def Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters ):
-    raise NotImplementedError
+
+    bestTraj = np.copy( originalTraj )
+    Error = aux_CalculateTrajectoryError( bestTraj, variablePoints )
+
+    # aspirationCriteria = 2
+    tabuTenure = 20
+    tabuList = dict()
+
+    for k in range( len( originalTraj ) ):
+
+        currTraj = np.copy( bestTraj )
+
+        if variablePoints[k]:
+
+            neighbours = getNeighbours( currTraj[k], auxParameters )
+
+            # neighbours = filter(lambda x: aspirationCriteria(x))
+
+            bestNeighbour = None
+
+            for neighbour in neighbours:
+
+                currTraj[k + 1] = neighbour
+
+                error = aux_CalculateTrajectoryError( currTraj, variablePoints )
+
+                cost_diff = Error - error
+
+                if cost_diff <= 0:
+
+                    bestTraj = np.copy( currTraj )
+
+                    bestNeighbour = neighbour
+
+        for key in tabuList.keys():
+            
+            tabuList[key] -= 1
+            
+            if tabuList[key] == 0:
+                del tabuList[key]
+
+        tabuList[bestNeighbour] = tabuTenure
+
+    return bestTraj
+
+
+
+
+
+
+def aspirationCriteria(point):
+    raise NotImplementedError()
+
+
 
 def Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters ):
     raise NotImplementedError
