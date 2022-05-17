@@ -6,7 +6,10 @@ Created on Wed Apr 20 15:15:21 2022
 @author: 
 """
 
+from sys import path_importer_cache
 import numpy as np
+import random
+import math
 
 
 
@@ -23,7 +26,7 @@ def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm ):
         newTraj = Algorithm_Hill_Climb( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'simulated_annealing':
-        auxParameters = { 'numIters': 1000 }
+        auxParameters = { 'numIters': 1 }
         newTraj = Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'tabu':
@@ -52,8 +55,8 @@ def Algorithm_Random( trajectory, variablePoints, auxParameters ):
         tTraj = np.copy( trajectory )
         for k in range( np.size( trajectory, 0 ) ):
             if variablePoints[ k ]:
-                tTraj[ k, 1 ] += np.random.normal( 0.0, 5 )
-                tTraj[ k, 2 ] += np.random.normal( 0.0, 5 )
+                tTraj[ k, 1 ] += np.random.normal( 0.0, .001 )
+                tTraj[ k, 2 ] += np.random.normal( 0.0, .001 )
                 
         newError = aux_CalculateTrajectoryError( tTraj, variablePoints )
         
@@ -74,6 +77,8 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
 
     for inerN in range( auxParameters[ 'numIters' ] ):
 
+        print(f'Iteration: {inerN}')
+
         t1Traj = np.copy( trajectory )
 
         for k in range( trajectory.shape[0] ):
@@ -86,10 +91,10 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
 
                 neighbours = getNeighbours( trajectory[k], auxParameters )
 
-                # bestNeighbour = t2Traj[k]
 
                 lowest_error = aux_CalculateTrajectoryError( t1Traj, variablePoints )
 
+                print('Going over newly generated neighbours...')
                 for neighbour in neighbours:
 
                     t2Traj[k] = neighbour
@@ -97,6 +102,8 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
                     error = aux_CalculateTrajectoryError( t2Traj, variablePoints )
 
                     if error < lowest_error:
+
+                        print('Better path found')
 
                         t1Traj = t2Traj
 
@@ -119,12 +126,12 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
 def getNeighbours( point, auxParameters ):
     neighbours = []
 
-    for _ in auxParameters[ 'numIters' ]:
+    for _ in range(auxParameters[ 'numIters' ]):
 
         neighbour = np.copy( point )
 
-        neighbour[1] += np.random.normal( 0, .1 )
-        neighbour[2] += np.random.normal( 0, .1 )
+        neighbour[1] += np.random.normal( 0, .001 )
+        neighbour[2] += np.random.normal( 0, .001 )
 
         neighbours.append(neighbour)
 
@@ -148,7 +155,8 @@ def Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters )
 
     while current_temp > final_temp:
 
-        for k in range( len( originalTraj.shape[0] ) ):
+
+        for k in range( originalTraj.shape[0] ):
 
             solution = np.copy( bestTraj )
             
@@ -162,11 +170,15 @@ def Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters )
 
                 if cost_diff > 0:
 
+                    print('New path found.')
+
                     bestTraj = np.copy( solution )
 
                 else:
 
                     if random.uniform(0, 1) < math.exp(-cost_diff/current_temp):
+
+                        print('New path found.')
 
                         bestTraj = np.copy( solution )
 
@@ -233,6 +245,18 @@ def aspirationCriteria(point):
 
 def Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters ):
     raise NotImplementedError
+
+
+def Genetic_Algorithm( originalTraj, variablePoints, auxParameters ):
+    # prvo ke gi najdam site True variable variablePoints
+    # za sekoj variablePoint, vklucuvajki go i veke postoeckio, 
+    # ke im napravam selekcija so nekojasi zasega nespecificirana fitness funkcija
+    # ke napravam vkrstuvanje i na odreden procent ke napravam mutacija
+    # i taka tava ke go praam 1000 pati
+    # posle tava, za sekoj variable point ke ga izberam najdobrata tocka
+    # ke ga vratam traektorijata
+
+    raise NotImplementedError()
 
 
 
