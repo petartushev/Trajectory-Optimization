@@ -51,7 +51,7 @@ def Algorithm_Random( double[][4] trajectory, bint[] variablePoints, auxParamete
 
     TRAJECTORY_LENGTH = sizeof(trajectory)/sizeof(trajectory[0])
 
-    cdef double(*)[4] bestTraj = <double *> malloc(TRAJECTORY_LENGTH*4*sizeof(double)) 
+    cdef double[][4] bestTraj = <double *> malloc(TRAJECTORY_LENGTH*4*sizeof(double)) 
     cdef double *tTraj = <double *> malloc(TRAJECTORY_LENGTH*4*sizeof(double))
 
 
