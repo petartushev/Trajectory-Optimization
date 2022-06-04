@@ -35,7 +35,7 @@ def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm ):
         newTraj = Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'local_beam':
-        auxParameters = { 'numIters': 1 }
+        auxParameters = { 'numIters': 10 }
         newTraj = Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters )
 
 
@@ -61,8 +61,8 @@ def Algorithm_Random( trajectory, variablePoints, auxParameters ):
         tTraj = np.copy( trajectory )
         for k in range( np.size( trajectory, 0 ) ):
             if variablePoints[ k ]:
-                tTraj[ k, 1 ] += np.random.normal( 0.0, .01 )
-                tTraj[ k, 2 ] += np.random.normal( 0.0, .01 )
+                tTraj[ k, 1 ] += np.random.normal( 0.0, .001 )
+                tTraj[ k, 2 ] += np.random.normal( 0.0, .001 )
                 
         newError = aux_CalculateTrajectoryError( tTraj, variablePoints )
         
@@ -242,8 +242,65 @@ def Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters ):
 
 
 
-def Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters ):
-    print()
+def Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters, beta=3 ):
+    
+    bestTraj = originalTraj
+    Error = aux_CalculateTrajectoryError(originalTraj, variablePoints)
+
+    # print(Error)
+
+    for _ in range( auxParameters['numIters'] ):
+
+        tier_to_paths = dict()
+
+        for k in range(len(originalTraj)):
+
+            tmp_path = np.copy(bestTraj)
+
+            if variablePoints[k]:
+
+                # vo tier_to_paths dictionary da inicijaliziram na tocka k u traektorijata prazna numpy.array
+
+                tier_to_paths[k] = []
+
+                # za sekoj variable point da izgeneriram novi points
+
+                neighbours = getNeighbours(originalTraj[k])
+
+                # za sekoj izgeneriran nov point da presmetam haversine distance
+
+                for neighbour in neighbours:
+
+                    tmp_path[k] = neighbour
+
+                    error = aux_CalculateTrajectoryError(tmp_path, variablePoints)
+
+                    if error < Error:
+
+                        tier_to_paths[k].append(np.array([neighbour, error]))
+
+                # najdobrite beta za k variable point da gi zacuvam 
+                tier_to_paths[k] = sorted(tier_to_paths[k], key=lambda x: x[1], reverse=False)[:beta]
+                
+                # print(tier_to_paths[k])
+                # print()
+
+                if len(tier_to_paths[k]) > 0:
+                    if tier_to_paths[k][0][1] < Error:
+                        
+                        # print(tier_to_paths[k][0])
+
+                        tmp_path[k] = tier_to_paths[k][0][0]
+
+                        bestTraj = np.copy(tmp_path)
+                        Error = tier_to_paths[k][0][1]
+
+    return bestTraj
+
+
+
+
+
 
 
 def Genetic_Algorithm( originalTraj, variablePoints, auxParameters ):
@@ -346,9 +403,8 @@ def Genetic_Algorithm( originalTraj, variablePoints, auxParameters ):
         bestTraj[key] = value
 
     return bestTraj
-      
 
-               
+
 
 
 def getNeighbours( point ):
@@ -365,15 +421,6 @@ def getNeighbours( point ):
 
     return neighbours
 
-
-
-
-def pairwise(iterable):
-
-    a, b = tee(iterable)
-    next(b, None)
-
-    return zip(a, b)
                 
 
 
@@ -385,7 +432,11 @@ def aux_CalculateTrajectoryError( trajectory, variablePoints ):
     for k in range( np.size( variablePoints ) ):
         
         if variablePoints[ k ]:
-            totalError += aux_CalculateErrorSinglePoint( trajectory, k )
+            single_point_error = aux_CalculateErrorSinglePoint( trajectory, k )
+            
+            if ~np.isnan(single_point_error):
+
+                totalError += single_point_error
     
     return totalError
 
