@@ -15,7 +15,7 @@ from itertools import tee
 
 
 
-def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm ):
+def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm, costFunc, num_particles ):
     
     
     if optAlgorithm == 'random':
@@ -42,6 +42,10 @@ def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm ):
     if optAlgorithm == 'genetic':
         auxParameters = { 'numIters': 1 }
         newTraj = Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters )
+
+    if optAlgorithm == 'pso':
+        auxParameters = { 'numIters': 5 }
+        newTraj = Algorithm_Particle_Swarm(originalTraj, variablePoints, costFunc, num_particles, auxParameters)
     
     
     
@@ -404,6 +408,151 @@ def Genetic_Algorithm( originalTraj, variablePoints, auxParameters ):
 
     return bestTraj
 
+
+def Algorithm_Particle_Swarm(trajectory, variablePoints, costFunc, num_particles, auxParameters):
+
+    pso = PSO(trajectory, variablePoints, costFunc, num_particles, auxParameters['numIters'])
+
+    return pso.run()
+
+
+# Treba hiperparametrite na velocity da se tunirat
+
+class Particle:
+
+    def __init__(self, trajectory, variablePoints, costFunc, k):
+
+        self.trajectory = np.copy(trajectory)
+        self.variablePoints = variablePoints
+        self.costFunc = costFunc
+        self.k = k
+
+        # self.position_i = []                                                            
+        # self.velocity_i = []                                                            
+        # self.pos_best_i = []                                                             
+
+        self.err_best_i = costFunc(trajectory, variablePoints)                                          # best individual error
+        self.err_i = costFunc(trajectory, variablePoints)                                               # individual error
+
+        pos = trajectory[k].copy()
+        pos[1] += np.random.normal(0, .0005)
+        pos[2] += np.random.normal(0, .0005)
+
+        self.position_i = pos                                                                           # particle position
+        self.pos_best_i = pos                                                                           # best individual position
+        self.velocity_i = [None, np.random.uniform(-.05, .05), np.random.uniform(-.05, .05), None]      # particle velocity
+        # print(f'Trajectory[k]: {trajectory[k]}. New pos: {pos[1:3]}')    
+
+
+
+    def evaluate(self):
+
+        self.trajectory[self.k] = np.copy(self.position_i)
+
+        self.err_i = self.costFunc(self.trajectory, self.variablePoints)
+
+
+        if self.err_i < self.err_best_i:
+
+            # print(f'New local minimum found')
+            # print(f'self.err_best_i: {self.err_best_i} -> self.err_i: {self.err_i}')
+
+            self.pos_best_i = np.copy(self.position_i)
+            self.err_best_i = self.err_best_i
+
+
+    def update_velocity(self, pos_best_g):
+
+        w = .9
+        c1 = np.random.random()
+        c2 = np.random.random()
+
+        r1 = np.random.random()
+        r2 = np.random.random()
+
+        for i in range(1, 3, 1):
+
+            vel_cognitive = c1*r1*(self.pos_best_i[i] - self.position_i[i])
+            vel_social = c2*r2*(pos_best_g[i] - self.position_i[i])
+            self.velocity_i[i] = w*self.velocity_i[i] + vel_cognitive + vel_social
+
+
+
+    def update_position(self):
+
+        for i in range(1, 3, 1):
+            self.position_i[i] = self.position_i[i] + self.velocity_i[i]
+
+    
+
+
+class PSO:
+
+    def __init__(self, trajectory, variablePoints, costFunc, num_particles, numIter):
+
+        self.trajectory = np.copy(trajectory)
+        self.variablePoints = variablePoints
+        self.costFunc = costFunc
+        self.num_particles = num_particles
+        self.numIter = numIter
+
+        self.bestTraj = np.copy(self.trajectory)
+
+        self.pos_best_g = dict()                                                            # best group position
+        self.err_best_g = dict()                                                            # best group error
+
+
+        self.swarm = dict()
+
+    def run(self):
+        
+        for k in np.where(self.variablePoints)[0]:
+
+            self.swarm[k] = []
+            self.pos_best_g[k] = self.trajectory[k]
+            self.err_best_g[k] = self.costFunc(self.trajectory, self.variablePoints)
+
+            for _ in range(self.num_particles):
+
+                self.swarm[k].append(Particle(self.trajectory, self.variablePoints, self.costFunc, k))
+
+        for _ in range(self.numIter):
+
+            for k in np.where(self.variablePoints)[0]:
+
+                for i in range(self.num_particles):
+
+                    self.swarm[k][i].evaluate()
+
+                    if self.swarm[k][i].err_i < self.err_best_g[k]:
+
+                        # print('New global minimum found.')
+
+                        # print(f'self.err_best_g[k]: {self.err_best_g[k]} -> self.swarm[k][i].err_i: {self.swarm[k][i].err_i}')
+
+                        self.pos_best_g[k] = self.swarm[k][i].pos_best_i
+                        self.err_best_g[k] = float(self.swarm[k][i].err_best_i)
+
+
+                    self.swarm[k][i].update_velocity(self.pos_best_g[k])
+                    self.swarm[k][i].update_position()
+
+            # for k in np.where(self.variablePoints)[0]:
+
+            #     for i in range(self.num_particles):
+
+
+
+
+        for k in np.where(self.variablePoints)[0]:
+
+            self.bestTraj[k] = self.pos_best_g[k]
+
+        if self.costFunc(self.bestTraj, self.variablePoints) <  self.costFunc(self.trajectory, self.variablePoints):
+            return self.bestTraj
+
+        print('No improved path found.')
+        return self.trajectory
 
 
 
