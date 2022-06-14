@@ -10,12 +10,69 @@ from sys import path_importer_cache
 import numpy as np
 import random
 import math
-from itertools import tee
+from copy import deepcopy
+from six import add_metaclass
+from abc import ABCMeta
+
+
+def aux_haversine(lon1, lat1, lon2, lat2): # haversine is the angle distance between two points on a sphere 
+    
+    from math import radians, cos, sin, asin, sqrt
+
+    R = 6372.8
+
+    dLat = radians(lat2 - lat1)
+    dLon = radians(lon2 - lon1)
+    lat1 = radians(lat1)
+    lat2 = radians(lat2)
+
+    a = sin(dLat/2)**2 + cos(lat1)*cos(lat2)*sin(dLon/2)**2
+    c = 2*asin(sqrt(a))
+
+    return R * c
+
+def aux_CalculateErrorSinglePoint( trajectory, targetPoint ):
+    
+    
+    v_m1 = aux_haversine( trajectory[ targetPoint - 1, 2 ], trajectory[ targetPoint - 1, 1 ], trajectory[ targetPoint, 2 ], trajectory[ targetPoint, 1 ] )
+    s_m1 = v_m1 / ( trajectory[ targetPoint, 0 ] - trajectory[ targetPoint - 1, 0 ] )
+    
+    
+    v_m2 = aux_haversine( trajectory[ targetPoint - 2, 2 ], trajectory[ targetPoint - 2, 1 ], trajectory[ targetPoint - 1, 2 ], trajectory[ targetPoint - 1, 1 ] )
+    s_m2 = v_m2 / ( trajectory[ targetPoint - 1, 0 ] - trajectory[ targetPoint - 2, 0 ] )
+    
+    
+    v_p1 = aux_haversine( trajectory[ targetPoint, 2 ], trajectory[ targetPoint, 1 ], trajectory[ targetPoint + 1, 2 ], trajectory[ targetPoint + 1, 1 ] )
+    s_p1 = v_p1 / ( trajectory[ targetPoint + 1, 0 ] - trajectory[ targetPoint, 0 ] )
+    
+    
+    v_p2 = aux_haversine( trajectory[ targetPoint + 1, 2 ], trajectory[ targetPoint + 1, 1 ], trajectory[ targetPoint + 2, 2 ], trajectory[ targetPoint + 2, 1 ] )
+    s_p2 = v_p2 / ( trajectory[ targetPoint + 2, 0 ] - trajectory[ targetPoint + 1, 0 ] )
+
+    return np.std( [ v_m2, v_m1, v_p1, v_p2 ] ) / np.mean( [ v_m2, v_m1, v_p1, v_p2 ] )
 
 
 
 
-def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm, costFunc, num_particles ):
+def aux_CalculateTrajectoryError( trajectory, variablePoints ):
+    
+    totalError = 0.0
+    
+    for k in range( np.size( variablePoints ) ):
+        
+        if variablePoints[ k ]:
+            single_point_error = aux_CalculateErrorSinglePoint( trajectory, k )
+            
+            if ~np.isnan(single_point_error):
+
+                totalError += single_point_error
+    
+    return totalError
+
+
+
+
+def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm ):
     
     
     if optAlgorithm == 'random':
@@ -23,7 +80,7 @@ def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm, costFunc,
         newTraj = Algorithm_Random( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'hill_climb':
-        auxParameters = { 'numIters': 10 }
+        auxParameters = { 'numIters': 1000 }
         newTraj = Algorithm_Hill_Climb( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'simulated_annealing':
@@ -40,12 +97,13 @@ def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm, costFunc,
 
 
     if optAlgorithm == 'genetic':
-        auxParameters = { 'numIters': 1 }
+        auxParameters = { 'numIters': 5 }
         newTraj = Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'pso':
         auxParameters = { 'numIters': 5 }
         newTraj = Algorithm_Particle_Swarm(originalTraj, variablePoints, costFunc, num_particles, auxParameters)
+
     
     
     
@@ -87,7 +145,7 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
 
     for inerN in range( auxParameters[ 'numIters' ] ):
 
-        print(f'Iteration: {inerN}')
+        # print(f'Iteration: {inerN}')
 
         t1Traj = np.copy( trajectory )
 
@@ -104,7 +162,7 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
 
                 lowest_error = aux_CalculateTrajectoryError( t1Traj, variablePoints )
 
-                print('Going over newly generated neighbours...')
+                # print('Going over newly generated neighbours...')
                 for neighbour in neighbours:
 
                     t2Traj[k] = neighbour
@@ -113,7 +171,7 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
 
                     if error < lowest_error:
 
-                        print('Better path found')
+                        # print('Better path found')
 
                         t1Traj = t2Traj
 
@@ -235,14 +293,6 @@ def Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters ):
         #     del tabuList[key]
 
     return bestTraj
-
-
-
-
-
-
-# def aspirationCriteria(point):
-#     raise NotImplementedError()
 
 
 
@@ -426,11 +476,7 @@ class Particle:
         self.variablePoints = variablePoints
         self.costFunc = costFunc
         self.k = k
-
-        # self.position_i = []                                                            
-        # self.velocity_i = []                                                            
-        # self.pos_best_i = []                                                             
-
+                                                         
         self.err_best_i = costFunc(trajectory, variablePoints)                                          # best individual error
         self.err_i = costFunc(trajectory, variablePoints)                                               # individual error
 
@@ -555,6 +601,268 @@ class PSO:
         return self.trajectory
 
 
+def Algorithm_Bee_Colony(trajectory, variablePoints, loss_function=aux_CalculateTrajectoryError, colony_size=300, n_iter=2000, max_trials=20, simulations=200):
+
+    bestTraj = np.copy(trajectory)
+    
+    for s in range(simulations):
+        
+        print(f'Simulation: {s}')
+        
+        optimizer = ABC(bestTraj, variablePoints, loss_function, colony_size, n_iter, max_trials)
+        
+        optimizer.optimize()
+        
+        
+        for k in np.where(variablePoints)[0]:
+            bestTraj[k] = optimizer.optimality_tracking[k]
+            
+
+            
+    return bestTraj
+
+@add_metaclass(ABCMeta)
+class ArtificialBee:
+    
+    TRIAL_INITIAL_DEFAULT_VALUE = 0
+    INITIAL_DEFAULT_PROBABILITY = 0.0
+    STD_DEV = .0005
+    
+    def __init__(self, trajectory, variablePoints, k, loss_function):
+        
+        self.trajectory = np.copy( trajectory )
+        self.variablePoints = variablePoints
+        self.k = k
+        self.pos = self.trajectory[self.k]
+        self.pos[1] += np.random.normal(0, ArtificialBee.STD_DEV)
+        self.pos[2] += np.random.normal(0, ArtificialBee.STD_DEV)
+        
+        self.loss_function = loss_function
+
+        self.fitness = loss_function(self.trajectory, self.variablePoints)
+        self.trial = ArtificialBee.TRIAL_INITIAL_DEFAULT_VALUE
+        self.prob = ArtificialBee.INITIAL_DEFAULT_PROBABILITY
+        
+    
+    def update_bee(self, pos, fitness):
+        
+        if fitness <= self.fitness:
+            
+            self.pos = pos
+            self.trajectory[self.k] = self.pos
+            self.fitness = fitness
+            self.trial = 0
+            
+        else:
+            self.trial += 1
+            
+    def reset_bee(self, max_trials):
+        
+        if self.trial >= max_trials:
+            
+            self.__reset_bee()
+            
+    def __reset_bee(self):
+        
+        self.pos = self.trajectory[k]
+        self.pos[1] += np.random.normal(0, ArtificialBee.STD_DEV)
+        self.pos[2] += np.random.normal(0, ArtificialBee.STD_DEV)
+        self.fitness = self.loss_function(self.trajectory, self.variablePoints)
+        self.trial = ArtificialBee.TRIAL_INITIAL_DEFAULT_VALUE
+        self.prob = ArtificialBee.INITIAL_DEFAULT_PROBABILITY
+
+class EmployeeBee(ArtificialBee):
+    
+    def explore(self, max_trials):
+        
+        if self.trial <= max_trials:
+            
+            component = np.copy(self.pos)
+            component[1] += np.random.normal(0, ArtificialBee.STD_DEV)
+            component[2] += np.random.normal(0, ArtificialBee.STD_DEV)
+            phi = np.random.uniform(low=-1, high=1, size=len(self.pos))
+            n_pos = self.pos + (self.pos - component) * phi
+            tmp = np.copy(self.trajectory)
+            tmp[self.k] = n_pos
+            n_fitness = self.loss_function(tmp, self.variablePoints)
+            self.update_bee(n_pos, n_fitness)
+            
+    def get_fitness(self):
+        return 1 / (1 + self.fitness) if self.fitness >= 0 else 1 + np.abs(self.fitness)
+    
+    def compute_prob(self, max_fitness):
+        self.prob = self.get_fitness / max_fitness
+
+class OnlookerBee(ArtificialBee):
+    
+    def onlook(self, best_food_sources, max_trials):
+        candidate = np.random.choice(best_food_sources)
+        self.__exploit(candidate.pos, candidate.fitness, max_trials)
+    
+    
+    def __exploit(self, candidate, fitness, max_trials):
+        
+        if self.trial <= max_trials:
+            
+            component = np.random.choice(candidate)
+            phi = np.random.uniform(low=-1, high=1, size=len(component))
+            n_pos = candidate + (candidate - component) * phi
+#             n_pos = self.evaluate_boundries(n_pos)
+            tmp = np.copy(self.trajectory)
+            tmp[self.k] = n_pos
+            n_fitness = self.loss_function(tmp, self.variablePoints)
+            
+            if n_fitness <= fitness:
+                
+                self.pos = n_pos
+                self.trajectory[self.k] = self.pos
+                self.fitness = n_fitness
+                self.trial = 0
+                
+            else:
+                
+                self.trial += 1
+
+
+class ABC:
+    
+    def __init__(self, trajectory, variablePoints, loss_function, colony_size, n_iter, max_trials):
+        
+        self.trajectory = np.copy(trajectory)
+        self.variablePoints = variablePoints
+        self.colony_size = colony_size
+        self.loss_function = loss_function
+        self.n_iter = n_iter
+        self.max_trials = max_trials
+        
+        self.optimal_solution = dict()
+        self.optimality_tracking = dict()
+        
+        for k in np.where(self.variablePoints)[0]:
+            self.optimal_solution[k] = None
+            
+            self.optimality_tracking[k] = np.copy(self.trajectory[k])
+        
+        
+        self.employee_bees = dict()
+        self.onlooker_bees = dict()
+        
+    
+    def __reset_algorithm(self):
+        self.optimal_solution = dict()
+        self.optimality_tracking = dict()
+        
+        for k in np.where(self.variablePoints)[0]:
+            self.optimal_solution[k] = None
+            
+            self.optimality_tracking[k] = np.copy(self.trajectory[k])
+        
+        
+        
+    def __update_optimality_tracking(self, k):
+
+        Error = aux_CalculateTrajectoryError(self.trajectory, self.variablePoints)
+        tmp = np.copy(self.trajectory)
+        tmp[k] = self.optimal_solution[k].pos
+        error = aux_CalculateTrajectoryError(tmp, self.variablePoints)
+        
+        if error < Error:
+            
+            print(f'For point {k} in trajectory.')
+            print(f'Old error: {Error}')
+            print(f'New error: {error}')
+            print()
+            
+            self.trajectory = np.copy(tmp)
+            
+            self.optimality_tracking[k] = np.copy( self.optimal_solution[k].pos )
+        
+        
+    def __update_optimal_solution(self, k):
+        n_optimal_solution = min(self.onlooker_bees[k] + self.employee_bees[k], key=lambda bee: bee.fitness)
+        
+        if not self.optimal_solution[k]:
+            
+            self.optimal_solution[k] = deepcopy(n_optimal_solution)
+        
+        else:
+            
+            if n_optimal_solution.fitness < self.optimal_solution[k].fitness:
+                
+                print(f'New optimal solution for {k}: {n_optimal_solution.pos}')
+                              
+                self.optimal_solution[k] = deepcopy(n_optimal_solution)
+    
+    
+    
+    def __initialize_employees(self, k):
+
+        self.employee_bees[k] = []
+        
+        for _ in range(self.colony_size // 2):
+            self.employee_bees[k].append(EmployeeBee(self.trajectory, self.variablePoints, k, self.loss_function))
+            
+    def __initialize_onlookers(self, k):
+
+        self.onlooker_bees[k] = []
+        
+        for _ in range(self.colony_size // 2):
+            self.onlooker_bees[k].append(OnlookerBee(self.trajectory, self.variablePoints, k, self.loss_function))
+            
+    def __employee_bees_phase(self, k):
+        map(lambda bee: bee.explore(self.max_trials), self.employee_bees[k])
+        
+    def __calculate_probabilities(self, k):
+        
+        sum_fitness = sum(map(lambda bee: bee.get_fitness(), self.employee_bees[k]))
+        
+        map(lambda bee: bee.compute_prob(sum_fitness), self.employee_bees[k])
+        
+    
+    def __select_best_food_sources(self, k):
+        
+        self.best_food_sources = filter(lambda bee: bee.prob > np.random.uniform(low=0, high=1), self.employee_bees[k])
+        
+        while not self.best_food_sources:
+            
+            self.best_food_sources = filter(lambda bee: bee.prob > np.random.uniform(low=0, high=1), self.employee_bees[k])
+            
+    def __onlooker_bees_phase(self, k):
+        map(lambda bee: bee.onlook(self.best_food_sources, self.max_trials), self.onlooker_bees[k])
+        
+    def __scout_bees_phase(self, k):
+        map(lambda bee: bee.reset_bee(self.max_trials), self.onlooker_bees[k] + self.employee_bees[k])
+        
+    def optimize(self):
+        
+        self.__reset_algorithm()
+        
+        for k in np.where(self.variablePoints)[0]:
+
+            self.__initialize_employees(k)
+            self.__initialize_onlookers(k)
+        
+        
+        for i in range(self.n_iter):
+            
+            for k in np.where(self.variablePoints)[0]:
+            
+                self.__employee_bees_phase(k)
+                self.__update_optimal_solution(k)
+
+                self.__calculate_probabilities(k)
+                self.__select_best_food_sources(k)
+
+                self.__onlooker_bees_phase(k)
+                self.__scout_bees_phase(k)
+
+                self.__update_optimal_solution(k)
+                self.__update_optimality_tracking(k)
+            
+
+            
+
+
 
 def getNeighbours( point ):
     neighbours = []
@@ -570,62 +878,14 @@ def getNeighbours( point ):
 
     return neighbours
 
-                
-
-
-
-def aux_CalculateTrajectoryError( trajectory, variablePoints ):
-    
-    totalError = 0.0
-    
-    for k in range( np.size( variablePoints ) ):
-        
-        if variablePoints[ k ]:
-            single_point_error = aux_CalculateErrorSinglePoint( trajectory, k )
-            
-            if ~np.isnan(single_point_error):
-
-                totalError += single_point_error
-    
-    return totalError
 
 
 
 
-def aux_CalculateErrorSinglePoint( trajectory, targetPoint ):
-    
-    
-    v_m1 = aux_haversine( trajectory[ targetPoint - 1, 2 ], trajectory[ targetPoint - 1, 1 ], trajectory[ targetPoint, 2 ], trajectory[ targetPoint, 1 ] )
-    s_m1 = v_m1 / ( trajectory[ targetPoint, 0 ] - trajectory[ targetPoint - 1, 0 ] )
-    
-    
-    v_m2 = aux_haversine( trajectory[ targetPoint - 2, 2 ], trajectory[ targetPoint - 2, 1 ], trajectory[ targetPoint - 1, 2 ], trajectory[ targetPoint - 1, 1 ] )
-    s_m2 = v_m2 / ( trajectory[ targetPoint - 1, 0 ] - trajectory[ targetPoint - 2, 0 ] )
-    
-    
-    v_p1 = aux_haversine( trajectory[ targetPoint, 2 ], trajectory[ targetPoint, 1 ], trajectory[ targetPoint + 1, 2 ], trajectory[ targetPoint + 1, 1 ] )
-    s_p1 = v_p1 / ( trajectory[ targetPoint + 1, 0 ] - trajectory[ targetPoint, 0 ] )
-    
-    
-    v_p2 = aux_haversine( trajectory[ targetPoint + 1, 2 ], trajectory[ targetPoint + 1, 1 ], trajectory[ targetPoint + 2, 2 ], trajectory[ targetPoint + 2, 1 ] )
-    s_p2 = v_p2 / ( trajectory[ targetPoint + 2, 0 ] - trajectory[ targetPoint + 1, 0 ] )
-
-    return np.std( [ v_m2, v_m1, v_p1, v_p2 ] ) / np.mean( [ v_m2, v_m1, v_p1, v_p2 ] )
 
 
 
-def aux_haversine(lon1, lat1, lon2, lat2): # haversine is the angle distance between two points on a sphere 
-    
-    from math import radians, cos, sin, asin, sqrt
 
-    R = 6372.8
 
-    dLat = radians(lat2 - lat1)
-    dLon = radians(lon2 - lon1)
-    lat1 = radians(lat1)
-    lat2 = radians(lat2)
 
-    a = sin(dLat/2)**2 + cos(lat1)*cos(lat2)*sin(dLon/2)**2
-    c = 2*asin(sqrt(a))
 
-    return R * c
