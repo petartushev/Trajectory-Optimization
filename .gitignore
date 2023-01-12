@@ -178,6 +178,7 @@ api/*
 overleaf_pictures/*
 mlruns/*
 TOKEN
+SampleTraj/*.json
 .vscode/*
 Results/*
 junk/*
