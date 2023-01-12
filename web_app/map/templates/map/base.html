@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <!-- Required meta tags -->
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+        <!-- Bootstrap CSS -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+        <!-- <link rel="stylesheet", href="./style.css", type="text/css"> -->
+        <title>Trajectory optimization</title>
+
+        <style>
+            .card{
+                position: absolute; 
+                height: 90vh; 
+                width: 25vw; 
+                background-color: white; 
+                border-radius: 15px;
+                left: 3vw;
+            }
+            .vertical-center {
+                margin: 0;
+                position: absolute;
+                top: 50%;
+                -ms-transform: translateY(-50%);
+                transform: translateY(-50%);
+            }
+
+            .dropdown{
+                position: relative;
+                /* top: 50%;
+                -ms-transform: translateY(-50%);
+                transform: translateY(-50%); */
+                left: 50%;
+                transform: translateX(-50%);
+            }
+
+            .optimize-traj-button{
+                position: relative; 
+                margin-left: 19.5%; 
+                margin-top: 20%;
+                width: 270px; 
+                height: 40px;
+                border-radius: 5px;
+            }
+
+            .make-scrolling {
+                overflow-y: scroll;
+                height: 150px;
+            }
+        </style>
+
+    </head>
+    <body>
+        <div id="map-id" style="position: absolute; height: 100vh; width: 100vw; z-index: -1;">
+            {{map | safe}}
+        </div>
+
+        
+        <div class="card vertical-center" id="trajectories-dropdown-div">
+
+        <form method="POST" id="form-id"> {% csrf_token %}
+            
+            <div class="dropdown-trajectories">
+                <select id="trajectories-select" name="trajectories-select" style="position: relative; margin-left: 17.5%; margin-top: 20%; width: 300px; height: 30px;">
+                    <option value="default">Select trajectory</option>
+                    {% for traj in trajectories %}
+                        <option value="{{ traj|slice:'4:5' }}">traj{{ traj|slice:"4:5" }}</option>
+                    {% endfor %}
+                </select>
+                
+            </div>
+
+            <div class="dropdown-algorithms">
+                <select id="algorithms-select" name="algorithms-select" style="position: relative; margin-left: 17.5%; margin-top: 20%; width: 300px; height: 30px;">
+                    <option value="no-algorithm-selected">Select algorithm</option>
+                    <option value="random">Random search</option>
+                    <option value="hill_climb">Hill climbing</option>
+                    <option value="simulated_annealing">Simulated annealing</option>
+                    <option value="local_beam">Local beam search</option>
+                    <option value="genetic">Genetic algorithm</option>
+                    <option value="pso">Particle swarm optimization</option>
+                    <option value="bee-colony">Bee colony algorithm</option>
+                    <option value="tabu">Tbu search</option>
+                </select>
+            </div>
+
+            <div id="convert-button">
+                <button id="optimize-button" value="optimize" class="optimize-traj-button">Optimize trajectory</button>
+            </div>
+
+        </form>
+        </div>
+<!-- 
+        <div class="card vertical-center" id="algorithms-dropdown-div">
+
+        </div> -->
+
+        <!-- Optional JavaScript -->
+        <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+        <script src="https://code.jquery.com/jquery-3.6.3.js" integrity="sha256-nQLuAZGRRcILA+6dMBOvcRh5Pe310sBpanc6+QBmyVM=" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    </body>
+
+    <script>
+
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== "") {
+                const cookies = document.cookie.split(";");
+                for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+                }
+            }
+            return cookieValue;
+        }
+
+        $('#trajectories-select').on('change', function(){
+            var selected = $('#trajectories-select :selected').val()
+            console.log(selected)
+
+            $.ajax({
+                type: 'POST',
+                url: '',
+                data: JSON.stringify({num: selected}),
+                dataType: 'json', 
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRFToken": getCookie("csrftoken")  // don't forget to include the 'getCookie' function
+                }
+            }).then(function(response){
+                $('#map-id').html(response['new_map'])
+            })            
+        })
+
+        $('#optimize-button').on('click', function(event){
+            event.preventDefault()
+            var traj = $('#trajectories-select :selected').val()
+            var alg = $('#algorithms-select :selected').val()
+            
+            data = {num: traj, algorithm: alg}
+
+            $.ajax({
+                type: 'POST',
+                url: '',
+                data: JSON.stringify(data),
+                dataType: 'json',
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRFToken": getCookie("csrftoken"),  // don't forget to include the 'getCookie' function
+                    'optimize': true
+                }
+            }).then(function(response){
+                console.log(response)
+                $('#map-id').html(response['new_map'])
+            }) 
+        })
+    </script>
+</html>
