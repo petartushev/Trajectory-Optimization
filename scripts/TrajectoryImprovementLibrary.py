@@ -19,8 +19,6 @@ from abc import ABCMeta
 from IPython.display import display
 import folium
 
-# print(sys.path)
-# print(os.path.realpath(__file__))
 from loss_functions import aux_CalculateTrajectoryError
 
 
@@ -29,36 +27,37 @@ def TrajectoryImprovement( originalTraj, variablePoints, optAlgorithm ):
     
     if optAlgorithm == 'random':
         auxParameters = { 'numIters': 1000 }
-        newTraj = Algorithm_Random( originalTraj, variablePoints, auxParameters )
+        newTraj, corrected_error = Algorithm_Random( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'hill_climb':
         auxParameters = { 'numIters': 1 }
-        newTraj = Algorithm_Hill_Climb( originalTraj, variablePoints, auxParameters )
+        newTraj, corrected_error  = Algorithm_Hill_Climb( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'simulated_annealing':
         auxParameters = { 'numIters': 1 }
-        newTraj = Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters )
+        newTraj, corrected_error  = Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'tabu':
         auxParameters = { 'numIters': 1 }
-        newTraj, markers = Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters )
+        newTraj, corrected_error  = Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'local_beam':
         auxParameters = { 'numIters': 1 }
-        newTraj = Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters )
+        newTraj, corrected_error  = Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'genetic':
         auxParameters = { 'numIters': 1 }
-        newTraj = Genetic_Algorithm( originalTraj, variablePoints, auxParameters )
+        newTraj, corrected_error  = Genetic_Algorithm( originalTraj, variablePoints, auxParameters )
 
     if optAlgorithm == 'pso':
         auxParameters = { 'numIters': 13 }
-        newTraj = Algorithm_Particle_Swarm(originalTraj, variablePoints, auxParameters)
+        newTraj, corrected_error  = Algorithm_Particle_Swarm(originalTraj, variablePoints, auxParameters)
 
     
     
-    
-    return newTraj
+    # 'TUKA FRLA UnboundLocalError: local variable 'newTraj' referenced before assignment'
+    # 'DA GO RAZGLEDAM TVA'
+    return newTraj, corrected_error
 
 def map_error_points(traj, k):
 
@@ -132,9 +131,9 @@ def Algorithm_Random( trajectory, variablePoints, auxParameters ):
     return bestTraj
 
 
-def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
+def Algorithm_Hill_Climb( originalTraj, variablePoints, auxParameters ):
 
-    bestTraj = np.copy( trajectory )
+    bestTraj = np.copy( originalTraj )
     STD_DEV = .0001
 
     for _ in range( auxParameters[ 'numIters' ] ):
@@ -163,7 +162,12 @@ def Algorithm_Hill_Climb( trajectory, variablePoints, auxParameters ):
 
         bestTraj = np.copy(t1Traj)
 
-    return bestTraj
+    error_before = aux_CalculateTrajectoryError(originalTraj, variablePoints)
+    error_after = aux_CalculateTrajectoryError(bestTraj, variablePoints)
+
+    corrected_error = error_before - error_after
+
+    return bestTraj,  corrected_error
                     
 
 
@@ -224,7 +228,12 @@ def Algorithm_Simulated_Annealing( originalTraj, variablePoints, auxParameters )
 
         current_temp = initial_temp
 
-    return bestTraj
+    error_before = aux_CalculateTrajectoryError(originalTraj, variablePoints)
+    error_after = aux_CalculateTrajectoryError(bestTraj, variablePoints)
+
+    corrected_error = error_before - error_after
+
+    return bestTraj, corrected_error
 
 
 def Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters ):
@@ -236,7 +245,7 @@ def Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters ):
     # aspirationCriteria = 2
     tabuTenure = 20
     
-    markers = dict()
+    # markers = dict()
     
     for _ in range( auxParameters['numIters'] ):
 
@@ -289,7 +298,13 @@ def Algorithm_Tabu_Search( originalTraj, variablePoints, auxParameters ):
             if bestNeighbour is not None:
                 tabuList[bestNeighbour.tobytes()] = tabuTenure
 
-    return bestTraj, markers
+
+    error_before = aux_CalculateTrajectoryError(originalTraj, variablePoints)
+    error_after = aux_CalculateTrajectoryError(bestTraj, variablePoints)
+
+    corrected_error = error_before - error_after
+
+    return bestTraj, corrected_error
 
 
 
@@ -347,7 +362,12 @@ def Algorithm_Local_Beam( originalTraj, variablePoints, auxParameters, beta=3 ):
                     bestTraj = np.copy(tmp_path)
                     Error = tier_to_paths[k][0][1]
 
-    return bestTraj
+    error_before = aux_CalculateTrajectoryError(originalTraj, variablePoints)
+    error_after = aux_CalculateTrajectoryError(bestTraj, variablePoints)
+
+    corrected_error = error_before - error_after
+
+    return bestTraj, corrected_error
 
 
 
@@ -620,11 +640,16 @@ class PSO:
 
                 self.bestTraj[k] = self.pos_best_g[k].copy()
 
-        if self.costFunc(self.bestTraj, self.variablePoints) <  self.costFunc(self.trajectory, self.variablePoints):
-            return self.bestTraj
+        error_before = self.costFunc(self.trajectory, self.variablePoints)
+        error_after = self.costFunc(self.bestTraj, self.variablePoints)
+
+        corrected_error = error_before - error_after
+
+        if error_before <  error_after:
+            return self.bestTraj, corrected_error
 
         # print('No improved path found.')
-        return self.trajectory
+        return self.trajectory, 0
 
 
 def Algorithm_Bee_Colony(trajectory, variablePoints, loss_function=aux_CalculateTrajectoryError, colony_size=200, n_iter=2000, max_trials=20, simulations=5):
@@ -641,7 +666,7 @@ def Algorithm_Bee_Colony(trajectory, variablePoints, loss_function=aux_Calculate
         for k in np.where(variablePoints)[0]:
             bestTraj[k] = np.copy(optimizer.optimality_tracking[k])
             
-
+    # error_before = 
             
     return bestTraj
 
